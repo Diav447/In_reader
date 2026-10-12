@@ -10,133 +10,76 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Jikan Anime',
       theme: ThemeData(useMaterial3: true, colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple)),
-      home: const AnimeHome(),
+      home: const Home(),
     );
   }
 }
 
-class AnimeHome extends StatefulWidget {
-  const AnimeHome({super.key});
+class Home extends StatefulWidget {
+  const Home({super.key});
   @override
-  State<AnimeHome> createState() => _AnimeHomeState();
+  State<Home> createState() => _HomeState();
 }
 
-class _AnimeHomeState extends State<AnimeHome> {
-  List animeList = [];
+class _HomeState extends State<Home> {
+  List items = [];
   bool loading = false;
-  String errorMsg = "";
-  final searchCtrl = TextEditingController();
+  String err = "";
+  final ctrl = TextEditingController(text: "Naruto");
 
   @override
-  void initState() {
-    super.initState();
-    fetchAnime("Naruto");
-  }
+  void initState() { super.initState(); load("Naruto"); }
 
-  Future<void> fetchAnime(String q) async {
-    final query = q.trim();
-    if (query.isEmpty) return;
-    setState(() { loading = true; errorMsg = ""; animeList = []; });
-    final url = Uri.parse('https://api.jikan.moe/v4/anime?q=$query&limit=20&sfw=true&order_by=popularity&sort=desc');
+  Future<void> load(String q) async {
+    q = q.trim();
+    if (q.isEmpty) return;
+    setState(() { loading = true; err = ""; });
     try {
-      http.Response? res;
-      for (int i = 0; i < 3; i++) {
-        res = await http.get(url, headers: {'User-Agent': 'ln_reader'}).timeout(const Duration(seconds: 15));
-        if (res.statusCode!= 429) break;
-        await Future.delayed(Duration(seconds: 2 * (i + 1)));
-      }
-      if (res == null) throw Exception("No response");
+      final uri = Uri.parse("https://api.jikan.moe/v4/anime?q=$q&limit=20&sfw=true");
+      final res = await http.get(uri).timeout(const Duration(seconds: 20));
       if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        setState(() {
-          animeList = data['data']?? [];
-          loading = false;
-          if (animeList.isEmpty) errorMsg = "Gak ketemu '$query'";
-        });
-      } else if (res.statusCode == 429) {
-        setState(() { loading = false; errorMsg = "Jikan rate limit 429, tunggu 5 detik coba lagi"; });
+        final data = jsonDecode(res.body);
+        setState(() { items = data["data"]; loading = false; });
       } else {
-        setState(() { loading = false; errorMsg = "Error ${res.statusCode}"; });
+        setState(() { loading = false; err = "HTTP ${res.statusCode}"; });
       }
     } catch (e) {
-      setState(() { loading = false; errorMsg = "Gagal: $e"; });
+      setState(() { loading = false; err = "$e"; });
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F0FF),
-      appBar: AppBar(title: const Text("Jikan Anime Search", style: TextStyle(fontWeight: FontWeight.bold)), backgroundColor: Colors.deepPurple[200], centerTitle: true),
+      appBar: AppBar(title: const Text("Jikan Search"), centerTitle: true),
       body: Column(
         children: [
           Padding(
             padding: const EdgeInsets.all(12),
-            child: TextField(
-              controller: searchCtrl,
-              onSubmitted: (v) => fetchAnime(v),
-              decoration: InputDecoration(
-                hintText: "Cari anime... ex: One Piece",
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: IconButton(icon: const Icon(Icons.send), onPressed: () => fetchAnime(searchCtrl.text)),
-                filled: true, fillColor: Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-              ),
+            child: Row(
+              children: [
+                Expanded(child: TextField(controller: ctrl, onSubmitted: load, decoration: const InputDecoration(hintText: "One Piece", border: OutlineInputBorder()))),
+                const SizedBox(width: 8),
+                ElevatedButton(onPressed: () => load(ctrl.text), child: const Text("Go")),
+              ],
             ),
           ),
-          if (errorMsg.isNotEmpty) Padding(padding: const EdgeInsets.all(12), child: Text(errorMsg, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
+          if (err.isNotEmpty) Padding(padding: const EdgeInsets.all(8), child: Text(err, style: const TextStyle(color: Colors.red))),
           Expanded(
-            child: loading
-               ? const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [CircularProgressIndicator(), SizedBox(height: 12), Text("Lagi ngambil dari Jikan...")]))
-                : animeList.isEmpty && errorMsg.isEmpty
-                   ? const Center(child: Text("Ketik judul anime"))
-                    : GridView.builder(
-                        padding: const EdgeInsets.all(12),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, childAspectRatio: 0.62, crossAxisSpacing: 12, mainAxisSpacing: 12),
-                        itemCount: animeList.length,
-                        itemBuilder: (c, i) {
-                          final a = animeList[i];
-                          return GestureDetector(
-                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DetailPage(anime: a))),
-                            child: Container(
-                              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 4))]),
-                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                ClipRRect(borderRadius: const BorderRadius.vertical(top: Radius.circular(18)), child: Image.network(a['images']?['jpg']?['large_image_url']?? '', height: 160, width: double.infinity, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(height: 160, color: Colors.grey[300], child: const Icon(Icons.broken_image)))),
-                                Padding(padding: const EdgeInsets.all(8), child: Text(a['title']?? '-', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
-                              ]),
-                            ),
-                          );
-                        },
-                      ),
+            child: loading? const Center(child: CircularProgressIndicator())
+              : GridView.builder(
+                padding: const EdgeInsets.all(12),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, childAspectRatio: 0.65, crossAxisSpacing: 12, mainAxisSpacing: 12),
+                itemCount: items.length,
+                itemBuilder: (_, i) {
+                  final a = items[i];
+                  final img = a["images"]?["jpg"]?["large_image_url"]?? "";
+                  return Card(child: Column(children: [Expanded(child: Image.network(img, fit: BoxFit.cover, width: double.infinity)), Padding(padding: const EdgeInsets.all(6), child: Text(a["title"]??"", maxLines: 2, overflow: TextOverflow.ellipsis))]));
+                },
+              ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class DetailPage extends StatelessWidget {
-  final dynamic anime;
-  const DetailPage({super.key, required this.anime});
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(anime['title']?? 'Detail')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Center(child: ClipRRect(borderRadius: BorderRadius.circular(16), child: Image.network(anime['images']['jpg']['large_image_url']))),
-          const SizedBox(height: 16),
-          Text(anime['title']?? '', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Wrap(spacing: 8, children: [Chip(label: Text("⭐ ${anime['score']?? '-'}")), Chip(label: Text(anime['status']?? ''))]),
-          const SizedBox(height: 16),
-          const Text("Sinopsis:", style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Text(anime['synopsis']?? 'No synopsis'),
-        ]),
       ),
     );
   }
