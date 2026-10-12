@@ -15,19 +15,22 @@ jobs:
         with:
           flutter-version: '3.22.2'
           channel: 'stable'
-      - name: Create Flutter Project if needed
+      - name: Setup project
         run: |
-          if [ ! -f "android/app/src/main/AndroidManifest.xml" ]; then
+          if [ ! -f "pubspec.yaml" ]; then
             flutter create . --project-name ln_reader --org com.example --platforms android
           fi
-          # inject internet permission
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          if ! grep -q "android.permission.INTERNET" "$MANIFEST"; then
-            sed -i '/<application/a \    <uses-permission android:name="android.permission.INTERNET" \/>' "$MANIFEST" || true
-            # fallback inject before <application>
-            sed -i 's/<application/<uses-permission android:name="android.permission.INTERNET" \/>\n    <application/' "$MANIFEST"
+          if [ ! -d "android" ]; then
+            flutter create . --project-name ln_reader --org com.example --platforms android
           fi
-          cat "$MANIFEST"
+          # FIX AndroidManifest - remove broken permission and add correct one
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          echo "BEFORE:" && cat "$MANIFEST"
+          # hapus semua permission internet yang salah tempat
+          sed -i '/uses-permission/d' "$MANIFEST"
+          # tambah yang bener sebelum <application
+          sed -i 's/<application/<uses-permission android:name="android.permission.INTERNET" \/>\n    <application/' "$MANIFEST"
+          echo "AFTER:" && cat "$MANIFEST"
       - run: flutter pub get
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
