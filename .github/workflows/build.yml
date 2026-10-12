@@ -8,7 +8,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.22.3'
-      - run: flutter create. --project-name ln_reader --org com.example --platforms android
+      - run: flutter create . --project-name ln_reader --org com.example --platforms android
       - run: flutter pub get
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
